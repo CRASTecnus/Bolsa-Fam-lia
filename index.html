@@ -400,8 +400,19 @@ const eventStyles = {
   interrupt:{dot:"bg-purple-600",text:"text-purple-700",border:"border-purple-600",bg:"bg-purple-50",badge:"bg-purple-100 text-purple-800"}
 };
 
-let currentMonth = new Date(2026,0,1);
-let selectedDay = new Date(2026,0,1);
+// Abre sempre no dia correspondente à data atual do usuário.
+// Se a data atual estiver fora de 2026 (único ano com dados),
+// cai no limite mais próximo do ano (1º de janeiro ou 31 de dezembro).
+function getInitialDate(){
+  const today = new Date();
+  const year = today.getFullYear();
+  if (year < 2026) return new Date(2026,0,1);
+  if (year > 2026) return new Date(2026,11,31);
+  return new Date(2026, today.getMonth(), today.getDate());
+}
+
+let currentMonth = getInitialDate();
+let selectedDay = getInitialDate();
 
 function formatDate(d){ return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}`; }
 
