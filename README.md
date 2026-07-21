@@ -1,0 +1,101 @@
+# Bolsa Família 2026 — Calendário & Notas
+
+App simples (site estático) com:
+- Calendário oficial de pagamentos do Bolsa Família 2026 por final do NIS;
+- Prazos de saúde, educação, SICON e interrupção temporária;
+- Bloco de anotações por dia, **sincronizado entre todos os seus dispositivos** via Firebase (Google), de graça.
+
+Não precisa de servidor: você hospeda no próprio GitHub (GitHub Pages) e o Firebase cuida só do login e da sincronização das notas.
+
+---
+
+## 1. Estrutura dos arquivos
+
+```
+index.html          -> o app inteiro (calendário + notas + login)
+manifest.json        -> permite "instalar" o app no celular/computador
+sw.js                 -> deixa o app funcionando offline (guarda o "esqueleto" do app)
+icons/icon-192.png    -> ícone do app
+icons/icon-512.png    -> ícone do app (versão maior)
+firestore.rules       -> regras de segurança (cole no console do Firebase)
+```
+
+Suba todos esses arquivos para a raiz do seu repositório no GitHub (ou para uma subpasta, tanto faz, desde que fiquem todos juntos).
+
+---
+
+## 2. Criar o projeto no Firebase (grátis)
+
+1. Acesse **https://console.firebase.google.com** e entre com uma conta Google.
+2. Clique em **Adicionar projeto**, dê um nome (ex: `bolsa-familia-app`) e conclua a criação. Não precisa ativar o Google Analytics.
+3. Dentro do projeto, clique no ícone **`</>`** ("Adicionar app da Web").
+   - Dê um apelido, **não** marque Firebase Hosting (você vai usar o GitHub Pages).
+   - O Firebase vai mostrar um bloco `firebaseConfig` parecido com este:
+     ```js
+     const firebaseConfig = {
+       apiKey: "AIza...",
+       authDomain: "bolsa-familia-app.firebaseapp.com",
+       projectId: "bolsa-familia-app",
+       storageBucket: "bolsa-familia-app.appspot.com",
+       messagingSenderId: "123456789",
+       appId: "1:123456789:web:abcdef"
+     };
+     ```
+   - **Copie esse bloco inteiro.**
+4. Abra o arquivo `index.html`, procure por `SUBSTITUA pelos dados do SEU projeto Firebase` e troque o objeto `firebaseConfig` de exemplo pelo que você copiou.
+
+### Ativar login por e-mail/senha
+1. No menu lateral do Firebase, vá em **Build > Authentication**.
+2. Clique em **Get started** (ou "Sign-in method").
+3. Ative o provedor **E-mail/senha**.
+
+### Criar o banco de dados (Firestore)
+1. No menu lateral, vá em **Build > Firestore Database**.
+2. Clique em **Criar banco de dados**.
+3. Escolha **modo de produção** e a região mais próxima (ex: `southamerica-east1` — São Paulo).
+4. Depois de criado, vá na aba **Regras** e cole o conteúdo do arquivo `firestore.rules` deste projeto. Clique em **Publicar**.
+
+Pronto — o Firebase está configurado. Isso é 100% grátis para uso pessoal (o plano gratuito do Firebase é bem generoso para um app individual).
+
+---
+
+## 3. Publicar no GitHub Pages
+
+1. Crie um repositório no GitHub (pode ser público ou privado) e suba todos os arquivos deste projeto (`index.html`, `manifest.json`, `sw.js`, pasta `icons/`, `firestore.rules`).
+2. No repositório, vá em **Settings > Pages**.
+3. Em "Source", escolha a branch `main` (ou `master`) e a pasta `/ (root)`.
+4. Salve. Depois de 1–2 minutos, o GitHub mostra o link do seu site, algo como:
+   `https://SEU-USUARIO.github.io/SEU-REPOSITORIO/`
+
+---
+
+## 4. Usando o app
+
+- Abra o link em qualquer navegador (celular ou computador).
+- No topo, clique em **Sincronizar notas** para criar uma conta (e-mail + senha) ou entrar.
+- Depois de logado, toda anotação feita em um dia fica salva na nuvem — abra o mesmo site em outro celular, entre com o mesmo e-mail/senha, e as notas aparecem automaticamente.
+- Sem login, as notas ficam salvas só naquele aparelho (modo local).
+- Digite o **final do seu NIS** na barra lateral para o calendário destacar automaticamente o seu dia de pagamento em cada mês.
+- No celular, o navegador costuma oferecer **"Adicionar à tela inicial" / "Instalar app"** — isso instala o site como um app de verdade, com ícone próprio.
+
+---
+
+## 5. Sobre as informações do Bolsa Família incluídas
+
+- Calendário de pagamentos por final do NIS: últimos 10 dias úteis de cada mês, com dezembro antecipado (encerra dia 23) — conforme calendário oficial MDS/Caixa 2026.
+- Valor mínimo garantido por família: R$ 600 (Benefício Complementar).
+- Benefício Primeira Infância: + R$ 150 por criança de 0 a 6 anos.
+- Benefício Variável Familiar: + R$ 50 por gestante, nutriz, criança/adolescente de 7 a 18 anos incompletos.
+- Necessidade de manter o Cadastro Único atualizado a cada 24 meses.
+- Condicionalidades de saúde e frequência escolar.
+- Prazo de 180 dias para sacar cada parcela.
+- Canais oficiais: Disque Social MDS (121) e Central Caixa (111), além do app Caixa Tem.
+
+**Atenção:** datas e valores podem mudar por decisão do governo ao longo do ano. Este app é uma ferramenta pessoal de organização — antes de qualquer decisão importante, confirme sempre no app oficial **Caixa Tem** ou no site **gov.br/mds**.
+
+---
+
+## 6. Personalizando
+
+- Cores, textos e ícones: tudo está em `index.html` (é um arquivo único, fácil de editar).
+- Para trocar o nome do app na tela inicial do celular, edite `name` e `short_name` em `manifest.json`.
