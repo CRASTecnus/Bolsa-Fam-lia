@@ -363,53 +363,87 @@
     renderReports();
   }
 
+  function normalizeText(value) {
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+  }
+
   function makeCrasFormattedWorkbook(base64) {
     const source = XLSX.read(bytesFromBase64(base64), {type:'array'});
+    const mapaBairros = {
+      'BURITIS':['Fernanda Gomes','Psicóloga','Buritis'],
+      'BURITI':['Fernanda Gomes','Psicóloga','Buritis'],
+      'CAIMBE':['Fernanda Gomes','Psicóloga','Caimbé'],
+      'LIBERDADE':['Cléo Sousa','Assistente Social','Liberdade'],
+      'PRICUMA':['Cléo Sousa','Assistente Social','Pricumã'],
+      'CAMBARA':['Bárbara Parente','Assistente Social','Cambará'],
+      'OLIMPICO':['Bárbara Parente','Assistente Social','Olímpico'],
+      'TANCREDO NEVES':['Bárbara Parente','Assistente Social','Tancredo Neves'],
+      'CENTENARIO':['Susy Andrade','Pedagoga','Centenário'],
+      'NOVA CANAA':['Susy Andrade','Pedagoga','Nova Canaã'],
+      'CINTURAO VERDE':['Paloma de Assis','Assistente Social','Cinturão Verde'],
+      'JOQUEI CLUBE':['Paloma de Assis','Assistente Social','Jóquei Clube'],
+      'ASA BRANCA':['Rafaela Garcia','Assistente Social','Asa Branca'],
+      'ASA BRACA':['Rafaela Garcia','Assistente Social','Asa Branca'],
+      'ASAS BRANCA':['Rafaela Garcia','Assistente Social','Asa Branca'],
+      '13 DE SETEMBRO':['Território Volante','Equipe volante','13 de Setembro'],
+      '13 DE SEEMBREO':['Território Volante','Equipe volante','13 de Setembro'],
+      'MARECHAL RONDON':['Território Volante','Equipe volante','Marechal Rondon'],
+      'NOVA VIDA':['Território Volante','Equipe volante','Nova Vida (Ocupação)'],
+      'NOVA VIDA (OCUPACAO)':['Território Volante','Equipe volante','Nova Vida (Ocupação)'],
+      'PROFESSORA ARACELI SOUTO MAIOR':['Território Volante','Equipe volante','Professora Araceli Souto Maior']
+    };
     const groups = new Map();
-    let header = null;
+    let rawHeader = null;
     source.SheetNames.forEach(sheetName => {
-      if (sheetName === 'Resumo do território') return;
       const rows = XLSX.utils.sheet_to_json(source.Sheets[sheetName], {header:1, defval:''});
-      if (!rows.length) return;
-      const h = rows[0];
-      if (!header) header = h;
-      const teamIdx = h.findIndex(v => String(v).trim().toLowerCase() === 'técnico/equipe');
-      const bairroIdx = h.findIndex(v => String(v).trim().toLowerCase() === 'bairro do território');
-      rows.slice(1).forEach(row => {
+      const headerIndex = rows.findIndex(row => {
+        const labels = row.map(v => normalizeText(v));
+        return labels.some(v => v === 'nº da linha' || v === 'n da linha') && labels.includes('bairro');
+      });
+      if (headerIndex < 0) return;
+      const h = rows[headerIndex];
+      if (!rawHeader) rawHeader = h;
+      const bairroIdx = h.findIndex(v => normalizeText(v) === 'bairro');
+      let currentBairro = '';
+      rows.slice(headerIndex + 1).forEach(row => {
         if (!row.some(v => String(v).trim() !== '')) return;
-        const team = teamIdx >= 0 && row[teamIdx] ? String(row[teamIdx]).trim() : sheetName;
-        const bairro = bairroIdx >= 0 ? String(row[bairroIdx] || '').trim() : '';
-        if (!groups.has(team)) groups.set(team, {rows: [], bairros: new Set(), formacao: ''});
+        const rowBairro = String(row[bairroIdx] || '').trim();
+        if (rowBairro) currentBairro = rowBairro;
+        if (!currentBairro) return;
+        const key = normalizeText(currentBairro).toUpperCase();
+        let config = mapaBairros[key];
+        if (!config && key.includes('ARACELI') && key.includes('SOUTO')) config = ['Território Volante','Equipe volante','Professora Araceli Souto Maior'];
+        if (!config && key.includes('PROF') && key.includes('ARACEL')) config = ['Território Volante','Equipe volante','Professora Araceli Souto Maior'];
+        if (!config && key.includes('TANCREDO')) config = ['Bárbara Parente','Assistente Social','Tancredo Neves'];
+        if (!config) return;
+        const [team, formacao, bairroNome] = config;
+        if (!groups.has(team)) groups.set(team, {rows:[], bairros:new Set(), formacao});
         const g = groups.get(team);
-        g.rows.push(row);
-        if (bairro) g.bairros.add(bairro);
-        if (!g.formacao && row[2]) g.formacao = row[2];
+        g.rows.push([bairroNome, team, formacao, ...row]);
+        g.bairros.add(bairroNome);
       });
     });
-    if (!header || !groups.size) throw new Error('Não encontrei uma tabela com a coluna Técnico/equipe.');
+    if (!rawHeader || !groups.size) throw new Error('Não encontrei o cabeçalho do relatório bruto ou nenhum bairro do mapa do CRAS.');
+    const outputHeader = ['Bairro do território','Técnico/equipe','Formação',...rawHeader];
     const out = XLSX.utils.book_new();
     const used = new Set();
-    const sheetName = (name) => {
-      const base = String(name || 'Dados').replace(/[\\/?*\\[\]:]/g, ' ').slice(0,31).trim() || 'Dados';
-      let clean = base, n = 2;
-      while (used.has(clean)) clean = (base.slice(0, 28) + ' ' + n++).slice(0,31);
+    const sheetName = name => {
+      const base = String(name || 'Dados').replace(/[\\/?*\[\]:]/g,' ').slice(0,31).trim() || 'Dados';
+      let clean=base,n=2; while(used.has(clean)) clean=(base.slice(0,28)+' '+n++).slice(0,31);
       used.add(clean); return clean;
     };
     const summary = [['Técnico/equipe','Formação','Bairros agrupados','Nº de bairros','Registros no relatório']];
-    [...groups.entries()].forEach(([team, g]) => {
-      const bairros = [...g.bairros].sort((a,b) => a.localeCompare(b, 'pt-BR'));
-      summary.push([team, g.formacao, bairros.join('; '), bairros.length, g.rows.length]);
+    [...groups.entries()].forEach(([team,g]) => {
+      const bairros=[...g.bairros].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+      summary.push([team,g.formacao,bairros.join('; '),bairros.length,g.rows.length]);
     });
-    XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet(summary), sheetName('Resumo do território'));
-    [...groups.entries()].forEach(([team, g]) => {
-      XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet([header, ...g.rows]), sheetName(team));
-    });
-    const bytes = XLSX.write(out, {bookType:'xlsx', type:'array'});
-    let binary = '';
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.slice(i, i + chunk));
+    XLSX.utils.book_append_sheet(out,XLSX.utils.aoa_to_sheet(summary),sheetName('Resumo do território'));
+    [...groups.entries()].forEach(([team,g]) => XLSX.utils.book_append_sheet(out,XLSX.utils.aoa_to_sheet([outputHeader,...g.rows]),sheetName(team)));
+    const bytes=XLSX.write(out,{bookType:'xlsx',type:'array'});
+    let binary=''; const chunk=0x8000;
+    for(let i=0;i<bytes.length;i+=chunk) binary+=String.fromCharCode(...bytes.slice(i,i+chunk));
     return btoa(binary);
-  }
+  };
 
   window.__handleReportUpload = async (input) => {
     const file = input.files[0];
