@@ -392,6 +392,7 @@
     };
     const groups = new Map();
     let rawHeader = null;
+    const informacoesRelatorio = [];
     source.SheetNames.forEach(sheetName => {
       const rows = XLSX.utils.sheet_to_json(source.Sheets[sheetName], {header:1, defval:''});
       const headerIndex = rows.findIndex(row => {
@@ -401,6 +402,10 @@
       if (headerIndex < 0) return;
       const h = rows[headerIndex];
       if (!rawHeader) rawHeader = h;
+      rows.slice(0, headerIndex).forEach(row => row.forEach(value => {
+        const text = String(value || '').trim();
+        if (text && !informacoesRelatorio.includes(text)) informacoesRelatorio.push(text);
+      }));
       const bairroIdx = h.findIndex(v => normalizeText(v) === 'bairro');
       let currentBairro = '';
       rows.slice(headerIndex + 1).forEach(row => {
@@ -430,13 +435,18 @@
       let clean=base,n=2; while(used.has(clean)) clean=(base.slice(0,28)+' '+n++).slice(0,31);
       used.add(clean); return clean;
     };
+    const ordemTecnicos = ['Fernanda Gomes','Cléo Sousa','Bárbara Parente','Susy Andrade','Paloma de Assis','Rafaela Garcia','Território Volante'];
+    const gruposOrdenados = [...groups.entries()].sort((a,b) => ordemTecnicos.indexOf(a[0]) - ordemTecnicos.indexOf(b[0]));
     const summary = [['Técnico/equipe','Formação','Bairros agrupados','Nº de bairros','Registros no relatório']];
-    [...groups.entries()].forEach(([team,g]) => {
+    gruposOrdenados.forEach(([team,g]) => {
       const bairros=[...g.bairros].sort((a,b)=>a.localeCompare(b,'pt-BR'));
       summary.push([team,g.formacao,bairros.join('; '),bairros.length,g.rows.length]);
     });
     XLSX.utils.book_append_sheet(out,XLSX.utils.aoa_to_sheet(summary),sheetName('Resumo do território'));
-    [...groups.entries()].forEach(([team,g]) => XLSX.utils.book_append_sheet(out,XLSX.utils.aoa_to_sheet([outputHeader,...g.rows]),sheetName(team)));
+    gruposOrdenados.forEach(([team,g]) => {
+      const finalRows = [outputHeader, ...g.rows, [], [], ['INFORMAÇÕES DO RELATÓRIO'], ...informacoesRelatorio.map(text => [text])];
+      XLSX.utils.book_append_sheet(out,XLSX.utils.aoa_to_sheet(finalRows),sheetName(team));
+    });
     const bordaLeve = {
       top: { style: 'thin', color: { rgb: 'D9E2F3' } },
       bottom: { style: 'thin', color: { rgb: 'D9E2F3' } },
@@ -479,7 +489,10 @@
         for (let c = range.s.c; c <= range.e.c; c++) {
           const address = XLSX.utils.encode_cell({r,c});
           if (!ws[address]) ws[address] = { v: '', t: 's' };
-          ws[address].s = r === range.s.r
+          const isInfoTitle = String(ws[address].v || '') === 'INFORMAÇÕES DO RELATÓRIO';
+          ws[address].s = isInfoTitle
+            ? { ...estiloCabecalho, fill: { patternType: 'solid', fgColor: { rgb: corAba } } }
+            : r === range.s.r
             ? { ...estiloCabecalho, fill: { patternType: 'solid', fgColor: { rgb: corAba } } }
             : (r % 2 === 0 ? estiloCelulaAlternada : estiloCelula);
         }
