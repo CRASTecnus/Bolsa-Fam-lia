@@ -393,7 +393,7 @@
     };
     const groups = new Map();
     let rawHeader = null;
-    const informacoesRelatorio = [];
+    const informacoesRelatorio = ['CRAS Cristiana Vicente Nunes'];
     source.SheetNames.forEach(sheetName => {
       const rows = XLSX.utils.sheet_to_json(source.Sheets[sheetName], {header:1, defval:''});
       const headerIndex = rows.findIndex(row => {
@@ -405,7 +405,8 @@
       if (!rawHeader) rawHeader = h;
       rows.slice(0, headerIndex).forEach(row => row.forEach(value => {
         const text = String(value || '').trim();
-        if (text && !informacoesRelatorio.includes(text)) informacoesRelatorio.push(text);
+        const manter = /^(Tipo de Benefício:|Data\/hora de geração:|Efeito:|Total de descumpridores:|Total de famílias com efeito:)/i.test(text);
+        if (manter && !informacoesRelatorio.includes(text)) informacoesRelatorio.push(text);
       }));
       const bairroIdx = h.findIndex(v => normalizeText(v) === 'bairro');
       let currentBairro = '';
