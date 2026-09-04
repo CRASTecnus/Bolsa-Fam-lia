@@ -487,7 +487,7 @@
       ws['!tabColor'] = corAba;
       ws['!rows'] = [];
       for (let r = range.s.r; r <= range.e.r; r++) {
-        ws['!rows'][r] = { hpt: r === range.s.r ? 38 : 28 };
+        ws['!rows'][r] = { hpt: r === range.s.r ? 46 : 36 };
         for (let c = range.s.c; c <= range.e.c; c++) {
           const address = XLSX.utils.encode_cell({r,c});
           if (!ws[address]) ws[address] = { v: '', t: 's' };
@@ -510,10 +510,17 @@
           max = Math.max(max, value.length);
         }
         const headerValue = String(ws[XLSX.utils.encode_cell({r: range.s.r, c})]?.v || '').toLowerCase();
-        const isLongText = /endereço|nome|motivo|tipo|referência|bairros agrupados/.test(headerValue);
-        ws['!cols'][c] = { wch: Math.min(max + 3, isLongText ? 72 : 30) };
+        const isLongText = /endereço|nome|motivo|tipo|referência|bairros agrupados|informações/.test(headerValue);
+        ws['!cols'][c] = { wch: Math.min(max + 4, isLongText ? 90 : 38) };
       }
+      ws['!margins'] = { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 };
     });
+    out.Workbook = out.Workbook || {};
+    out.Workbook.Sheets = out.SheetNames.map(name => ({
+      name,
+      Hidden: 0,
+      TabColor: { rgb: coresAbas[name] || '0B2F7A' }
+    }));
     const written=XLSX.write(out,{bookType:'xlsx',type:'array'});
     const bytes=written instanceof ArrayBuffer ? new Uint8Array(written) : written;
     let binary=''; const chunk=0x8000;
