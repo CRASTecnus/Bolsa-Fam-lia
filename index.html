@@ -506,6 +506,15 @@
       'Rafaela Garcia': '4F46E5',
       'Território Volante': '65A30D'
     };
+    const coresResumo = {
+      'Fernanda Gomes': 'E8F5E9',
+      'Cléo Sousa': 'F3E8FF',
+      'Bárbara Parente': 'FCE7F3',
+      'Susy Andrade': 'FFF3E0',
+      'Paloma de Assis': 'E0F7FA',
+      'Rafaela Garcia': 'E8EAF6',
+      'Território Volante': 'F0F9E8'
+    };
     out.SheetNames.forEach(name => {
       const ws = out.Sheets[name];
       const range = XLSX.utils.decode_range(ws['!ref']);
@@ -519,10 +528,14 @@
           const address = XLSX.utils.encode_cell({r,c});
           if (!ws[address]) ws[address] = { v: '', t: 's' };
           const isInfoTitle = String(ws[address].v || '') === 'INFORMAÇÕES DO RELATÓRIO';
+          const nomeResumo = name === 'Resumo do território' && r > range.s.r ? String(ws[XLSX.utils.encode_cell({r, c: 0})]?.v || '') : '';
+          const corResumo = coresResumo[nomeResumo];
           ws[address].s = isInfoTitle
             ? { ...estiloCabecalho, fill: { patternType: 'solid', fgColor: { rgb: corAba } } }
             : r === range.s.r
             ? { ...estiloCabecalho, fill: { patternType: 'solid', fgColor: { rgb: corAba } } }
+            : corResumo
+            ? { ...estiloCelula, fill: { patternType: 'solid', fgColor: { rgb: corResumo } }, font: { name: 'Arial', sz: 12, bold: c === 0, color: { rgb: '1F2937' } } }
             : (r % 2 === 0 ? estiloCelulaAlternada : estiloCelula);
         }
       }
