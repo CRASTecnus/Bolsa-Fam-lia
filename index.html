@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bolsa Família 2026 — Calendário & Notas</title>
+<title>Anona — Bolsa Família 2026</title>
+<meta name="description" content="Anona - Sistema de acompanhamento de condicionalidades do Bolsa Família">
 <meta name="theme-color" content="#0B2F7A">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/lucide@0.469.0"></script>
 <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -40,18 +41,45 @@
 </head>
 <body class="text-slate-900">
 
+<!-- TELA DE SENHA (bloqueia o app até digitar a senha correta) -->
+<div id="lockScreen" class="fixed inset-0 z-[9999] flex items-center justify-center px-4" style="background:linear-gradient(120deg,var(--azul-deep),var(--azul));">
+  <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm text-center">
+    <div class="mx-auto mb-3 w-12 h-12 rounded-xl flex items-center justify-center" style="background:#eef3fb;">
+      <i data-lucide="lock" class="w-6 h-6" style="color:var(--azul)"></i>
+    </div>
+    <h1 class="display font-bold text-lg mb-1">Anona</h1>
+    <p id="lockYearSubtitle" class="text-xs text-slate-400 mb-3">Bolsa Família 2026</p>
+    <p class="text-xs text-slate-500 mb-4">Digite a senha para abrir o app.</p>
+    <form id="lockForm" class="space-y-3" autocomplete="off">
+      <input id="lockPass" type="password" placeholder="Senha" autocomplete="current-password"
+        class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2"
+        style="--tw-ring-color:var(--azul)" />
+      <p id="lockError" class="text-xs font-semibold hidden" style="color:#c0392b;">Senha incorreta. Tente de novo.</p>
+      <button type="submit" class="w-full text-white py-2 rounded-xl text-sm font-bold" style="background:var(--azul)">Entrar</button>
+    </form>
+  </div>
+</div>
+
+<div id="appContent" style="display:none;">
+
 <!-- HEADER -->
 <header class="text-white shadow-lg" style="background:linear-gradient(120deg,var(--azul-deep),var(--azul));">
   <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
     <div class="flex items-center gap-3">
       <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="calendar-heart" class="w-6 h-6" style="color:var(--amarelo)"></i></div>
       <div>
-        <h1 class="display font-bold text-lg leading-none tracking-tight">Bolsa Família <span style="color:var(--amarelo)">2026</span></h1>
-        <p class="text-[11px] text-blue-200 uppercase tracking-widest mt-1">Calendário oficial + suas anotações</p>
+        <h1 class="display font-bold text-lg leading-none tracking-tight">Anona</h1>
+        <p class="text-[11px] text-blue-200 uppercase tracking-widest mt-1">Acompanhamento de condicionalidades · Bolsa Família <span id="headerYearSpan">2026</span></p>
         <p class="text-[10px] text-blue-300/80 mt-0.5">Paulo Xavier · CRP-20/09816 · Psicólogo</p>
       </div>
     </div>
-    <div id="authArea" class="text-right text-xs"></div>
+    <div class="flex items-center gap-2">
+      <div id="authArea" class="text-right text-xs"></div>
+      <button onclick="sairDoApp()" title="Travar o app (pedir a senha de novo)"
+        class="bg-white/10 hover:bg-white/20 p-2 rounded-xl transition">
+        <i data-lucide="lock" class="w-4 h-4"></i>
+      </button>
+    </div>
   </div>
   <div class="flag-ribbon"></div>
 </header>
@@ -229,7 +257,7 @@
 </main>
 
 <footer class="max-w-6xl mx-auto px-4 pb-10 text-center text-[11px] text-slate-400 space-y-1">
-  <p>Datas conforme calendário oficial MDS/Caixa 2026. Este app é uma ferramenta independente de organização pessoal — não é canal oficial do governo.</p>
+  <p id="footerYearText">Datas conforme calendário oficial MDS/Caixa 2026. Este app é uma ferramenta independente de organização pessoal — não é canal oficial do governo.</p>
   <p class="font-semibold text-slate-500">Criado por Paulo Xavier — CRP-20/09816 — Psicólogo</p>
 </footer>
 
@@ -744,7 +772,7 @@
     const fileFilterEl = document.getElementById('reportFileFilter');
     if (fileFilterEl) {
       const previous = fileFilterEl.value;
-      fileFilterEl.innerHTML = '<option value="">Escolha uma planilha</option>' + reports.map(r => `<option value="${r.id}">${MESES_NOMES[r.mes] || '?'} / ${r.ano} — ${r.filename || 'arquivo'}</option>`).join('');
+      fileFilterEl.innerHTML = '<option value="">Escolha uma planilha</option>' + reports.map(r => `<option value="${r.id}">${escapeHtml(MESES_NOMES[r.mes] || '?')} / ${r.ano} — ${escapeHtml(r.filename || 'arquivo')}</option>`).join('');
       if (reports.some(r => r.id === previous)) fileFilterEl.value = previous;
     }
 
@@ -755,8 +783,8 @@
     wrap.innerHTML = filtered.map(r => `
       <div class="flex items-center justify-between gap-2 border border-slate-200 rounded-xl px-3 py-2">
         <div class="min-w-0">
-          <p class="text-xs font-bold truncate">${MESES_NOMES[r.mes] || '?'} / ${r.ano}</p>
-          <p class="text-[10px] text-slate-400 truncate">${r.filename || ''} · ${r.sizeKB || 0} KB</p>
+          <p class="text-xs font-bold truncate">${escapeHtml(MESES_NOMES[r.mes] || '?')} / ${r.ano}</p>
+          <p class="text-[10px] text-slate-400 truncate">${escapeHtml(r.filename || '')} · ${r.sizeKB || 0} KB</p>
         </div>
         <div class="flex items-center gap-1 shrink-0">
           <button onclick="__downloadReport('${r.id}')" title="Baixar" class="p-1.5 rounded-lg hover:bg-slate-100"><i data-lucide="download" class="w-4 h-4" style="color:var(--azul)"></i></button>
@@ -775,13 +803,19 @@
     }
   };
 
-  onAuthStateChanged(auth, async (user) => {
+  // As funções abaixo só populam a tela com dados reais (notas, nome do
+  // e-mail sincronizado, planilhas de repercussão) DEPOIS que o app estiver
+  // destravado pela tela de senha. Antes disso, o Firebase pode resolver a
+  // sessão em segundo plano, mas guardamos o resultado em "pendência" sem
+  // tocar no HTML — assim, quem inspecionar a página antes de digitar a
+  // senha não encontra nada de verdade escondido no código.
+  async function runAuthUI(user) {
     currentUser = user;
     if (user) {
       authArea.innerHTML = `
         <div class="flex items-center gap-2 justify-end">
           <span class="hidden sm:inline text-blue-100">${user.email}</span>
-          <button onclick="doLogout()" class="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg font-semibold">Sair</button>
+          <button onclick="doLogout()" class="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg font-semibold">Sair da conta</button>
         </div>
         <p class="text-[10px] text-blue-200 mt-1 flex items-center gap-1 justify-end"><span>●</span> sincronizado na nuvem</p>`;
       await loadNotesFromCloud();
@@ -792,6 +826,18 @@
       render();
       await loadReports();
     }
+  }
+  // Exposto para a tela de senha poder chamar isso assim que for destravada.
+  window.__pbfRunAuthUI = runAuthUI;
+
+  onAuthStateChanged(auth, async (user) => {
+    if (window.__pbfUnlocked) {
+      await runAuthUI(user);
+    } else {
+      // App ainda travado: guarda o resultado sem exibir nada.
+      window.__pbfPendingAuthUser = user;
+      window.__pbfHasPendingAuth = true;
+    }
   });
 
   window.__getNotes = () => notes;
@@ -799,6 +845,33 @@
 
 <!-- APP -->
 <script>
+/* ======================================================================
+   ANO VIGENTE — TROQUE SÓ ISSO AQUI TODO INÍCIO DE ANO (passo 1)
+   Esse número controla o título, o cabeçalho, o rodapé, o PDF exportado
+   e a navegação do calendário (não deixa passar para outro ano).
+   ====================================================================== */
+const ANO_VIGENTE = 2026;
+
+// Aplica o ANO_VIGENTE nos textos da tela (título da aba, tela de senha,
+// cabeçalho e rodapé) — assim você só troca o número lá em cima e tudo
+// isso se atualiza sozinho, sem precisar caçar cada lugar que mostra o ano.
+document.title = `Anona — Bolsa Família ${ANO_VIGENTE}`;
+document.getElementById('lockYearSubtitle').textContent = `Bolsa Família ${ANO_VIGENTE}`;
+document.getElementById('headerYearSpan').textContent = ANO_VIGENTE;
+document.getElementById('footerYearText').textContent =
+  `Datas conforme calendário oficial MDS/Caixa ${ANO_VIGENTE}. Este app é uma ferramenta independente de organização pessoal — não é canal oficial do governo.`;
+
+
+/* ======================================================================
+   DADOS DO CALENDÁRIO OFICIAL — TROQUE TODO INÍCIO DE ANO (passo 2)
+   Pegue os dados novos no calendário oficial MDS/Caixa (bolsa família) e
+   nos comunicados de Condicionalidades (saúde/educação/SICON) do ano
+   vigente, e substitua os três blocos abaixo (monthHighlights,
+   officialEvents e paymentCalendar) pelos equivalentes do novo ano.
+   Mantenha o mesmo formato (mesmas chaves 0–11 para meses, mesmo
+   formato de data "AAAA-MM-DD" e mesma ordem de 10 posições — dígito
+   final do NIS 1,2,3,4,5,6,7,8,9,0 — no paymentCalendar).
+   ====================================================================== */
 const monthHighlights = {
   0:[{type:"saude",title:"Saúde: 1ª Vigência",desc:"Período de Coleta e Registro iniciado (Jan-Jun)."},{type:"interrupt",title:"Interrupção",desc:"Mês de aplicação dos efeitos de Interrupção Temporária."}],
   1:[{type:"saude",title:"Saúde: 1ª Vigência",desc:"Período de Coleta em andamento."},{type:"edu",title:"Educação: Início de Ciclo",desc:"Acompanhamento da frequência escolar (Fev/Mar)."}],
@@ -845,6 +918,7 @@ const officialEvents = {
 };
 
 const paymentCalendar = {
+  // Ordem das 10 colunas: NIS final 1,2,3,4,5,6,7,8,9,0 — nessa ordem.
   0:[19,20,21,22,23,26,27,28,29,30],
   1:[12,13,18,19,20,23,24,25,26,27],
   2:[18,19,20,23,24,25,26,27,30,31],
@@ -858,6 +932,7 @@ const paymentCalendar = {
   10:[16,17,18,19,23,24,25,26,27,30],
   11:[10,11,14,15,16,17,18,21,22,23]
 };
+/* ================= FIM DA ÁREA "EDITAR TODO INÍCIO DE ANO" ================= */
 
 const eventStyles = {
   saude:{dot:"bg-emerald-500",text:"text-emerald-700",border:"border-emerald-500",bg:"bg-emerald-50",badge:"bg-emerald-100 text-emerald-800"},
@@ -867,14 +942,14 @@ const eventStyles = {
 };
 
 // Abre sempre no dia correspondente à data atual do usuário.
-// Se a data atual estiver fora de 2026 (único ano com dados),
+// Se a data atual estiver fora de ANO_VIGENTE (único ano com dados),
 // cai no limite mais próximo do ano (1º de janeiro ou 31 de dezembro).
 function getInitialDate(){
   const today = new Date();
   const year = today.getFullYear();
-  if (year < 2026) return new Date(2026,0,1);
-  if (year > 2026) return new Date(2026,11,31);
-  return new Date(2026, today.getMonth(), today.getDate());
+  if (year < ANO_VIGENTE) return new Date(ANO_VIGENTE,0,1);
+  if (year > ANO_VIGENTE) return new Date(ANO_VIGENTE,11,31);
+  return new Date(ANO_VIGENTE, today.getMonth(), today.getDate());
 }
 
 let currentMonth = getInitialDate();
@@ -1009,7 +1084,7 @@ function updateDetails(){
   html += events.map(e=>`
     <div class="p-3 rounded-xl border-l-4 ${eventStyles[e.type].border} ${eventStyles[e.type].bg}">
       <h4 class="text-xs font-black ${eventStyles[e.type].text} uppercase">${e.title}</h4>
-      <p class="text-[10px] text-slate-600 mt-1">${e.desc || 'Prazo oficial do calendário 2026.'}</p>
+      <p class="text-[10px] text-slate-600 mt-1">${e.desc || `Prazo oficial do calendário ${ANO_VIGENTE}.`}</p>
     </div>`).join('');
   list.innerHTML = html || `<p class="text-slate-400 text-xs italic">Nenhum prazo específico neste dia.</p>`;
 
@@ -1021,7 +1096,7 @@ function updateDetails(){
 function changeMonth(offset){
   const newM = new Date(currentMonth);
   newM.setMonth(newM.getMonth()+offset);
-  if (newM.getFullYear() === 2026) { currentMonth = newM; render(); }
+  if (newM.getFullYear() === ANO_VIGENTE) { currentMonth = newM; render(); }
 }
 
 function updateNav(){
@@ -1064,8 +1139,8 @@ async function exportNotesPDF(){
   }
 
   const subtitleText = filterVal === 'all'
-    ? 'Bolsa Família 2026 · Calendário & Notas'
-    : `Bolsa Família 2026 · Anotações de ${monthNames[parseInt(filterVal,10)]}`;
+    ? `Anona · Bolsa Família ${ANO_VIGENTE} · Calendário & Notas`
+    : `Anona · Bolsa Família ${ANO_VIGENTE} · Anotações de ${monthNames[parseInt(filterVal,10)]}`;
 
   const docPdf = new jsPDF({ unit:'pt', format:'a4' });
   const pageW = docPdf.internal.pageSize.getWidth();
@@ -1150,8 +1225,8 @@ async function exportNotesPDF(){
   }
 
   docPdf.save(filterVal === 'all'
-    ? 'minhas-anotacoes-bolsa-familia-2026.pdf'
-    : `minhas-anotacoes-${monthNames[parseInt(filterVal,10)].toLowerCase()}-2026.pdf`);
+    ? `minhas-anotacoes-bolsa-familia-${ANO_VIGENTE}.pdf`
+    : `minhas-anotacoes-${monthNames[parseInt(filterVal,10)].toLowerCase()}-${ANO_VIGENTE}.pdf`);
 }
 
 document.getElementById('nisInput').addEventListener('input', render);
@@ -1200,6 +1275,70 @@ if ('serviceWorker' in navigator) {
     window.location.reload();
   });
 }
+</script>
+
+</div><!-- fim #appContent -->
+
+<script>
+  // Tela de senha simples: só serve para impedir que alguém que ache o
+  // link abra o app sem saber a senha. Não é uma segurança "de verdade"
+  // (a senha fica escondida no código do site) — é só uma trava simples
+  // de acesso pessoal.
+  (function () {
+    const SENHA_CORRETA = "Paulus";
+    const CHAVE_LOCAL = "pbf_desbloqueado";
+
+    // Sinaliza pro script do Firebase (que carrega depois) se o app já
+    // pode ou não exibir/buscar dados reais (notas, planilhas etc.).
+    window.__pbfUnlocked = false;
+
+    // Botão de cadeado no cabeçalho chama esta função: trava o app de novo,
+    // exigindo a senha na próxima vez (e também agora, na hora).
+    window.sairDoApp = function () {
+      localStorage.removeItem(CHAVE_LOCAL);
+      window.location.reload();
+    };
+
+    const lockScreen = document.getElementById('lockScreen');
+    const appContent = document.getElementById('appContent');
+    const lockForm = document.getElementById('lockForm');
+    const lockPass = document.getElementById('lockPass');
+    const lockError = document.getElementById('lockError');
+
+    function liberarApp() {
+      lockScreen.style.display = 'none';
+      appContent.style.display = '';
+      window.__pbfUnlocked = true;
+      // Se o Firebase já tinha resolvido a sessão em segundo plano enquanto
+      // a tela de senha estava aberta, só agora mandamos ele exibir e
+      // buscar os dados de verdade.
+      if (window.__pbfHasPendingAuth && window.__pbfRunAuthUI) {
+        window.__pbfHasPendingAuth = false;
+        window.__pbfRunAuthUI(window.__pbfPendingAuthUser);
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    // Se já desbloqueou antes neste aparelho, não pede a senha de novo.
+    if (localStorage.getItem(CHAVE_LOCAL) === 'sim') {
+      liberarApp();
+    } else {
+      if (window.lucide) lucide.createIcons();
+      lockPass.focus();
+    }
+
+    lockForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (lockPass.value === SENHA_CORRETA) {
+        localStorage.setItem(CHAVE_LOCAL, 'sim');
+        liberarApp();
+      } else {
+        lockError.classList.remove('hidden');
+        lockPass.value = '';
+        lockPass.focus();
+      }
+    });
+  })();
 </script>
 </body>
 </html>
