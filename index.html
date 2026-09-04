@@ -439,7 +439,8 @@
     });
     XLSX.utils.book_append_sheet(out,XLSX.utils.aoa_to_sheet(summary),sheetName('Resumo do território'));
     [...groups.entries()].forEach(([team,g]) => XLSX.utils.book_append_sheet(out,XLSX.utils.aoa_to_sheet([outputHeader,...g.rows]),sheetName(team)));
-    const bytes=XLSX.write(out,{bookType:'xlsx',type:'array'});
+    const written=XLSX.write(out,{bookType:'xlsx',type:'array'});
+    const bytes=written instanceof ArrayBuffer ? new Uint8Array(written) : written;
     let binary=''; const chunk=0x8000;
     for(let i=0;i<bytes.length;i+=chunk) binary+=String.fromCharCode(...bytes.slice(i,i+chunk));
     return btoa(binary);
@@ -462,8 +463,8 @@
   window.__handleReportUpload = async (input) => {
     const file = input.files[0];
     if (!file) return;
-    if (file.size > 1.5 * 1024 * 1024) {
-      alert('Esse arquivo está grande demais (acima de 1,5 MB) para guardar na nuvem.');
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Esse arquivo está grande demais (acima de 5 MB) para guardar na nuvem.');
       input.value = '';
       return;
     }
@@ -479,17 +480,29 @@
       const dataBase64 = makeCrasFormattedWorkbook(originalBase64);
       const nomeMes = MESES_NOMES[mes] || 'Mês';
       const nomeArquivo = `Repercussão ${nomeMes} de ${ano} (CRAS Cristiana).xlsx`;
+      const testeSaida = XLSX.read(bytesFromBase64(dataBase64), {type:'array'});
+      if (!testeSaida.SheetNames.length || testeSaida.SheetNames.every(n => !XLSX.utils.sheet_to_json(testeSaida.Sheets[n], {header:1}).length)) {
+        throw new Error('A planilha tratada não contém dados.');
+      }
+      const linkDownload = document.createElement('a');
+      linkDownload.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + dataBase64;
+      linkDownload.download = nomeArquivo;
+      document.body.appendChild(linkDownload); linkDownload.click(); linkDownload.remove();
       const record = { filename: nomeArquivo, mes, ano, sizeKB: Math.round((dataBase64.length * 3 / 4) / 1024), uploadedAt: Date.now(), dataBase64 };
-      if (currentUser) {
-        await addDoc(collection(db, 'users', currentUser.uid, 'repercussao'), record);
-      } else {
-        const local = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]');
-        local.push({ id: 'local_' + Date.now(), ...record });
-        localStorage.setItem('pbf_repercussao_local', JSON.stringify(local));
+      try {
+        if (currentUser) {
+          await addDoc(collection(db, 'users', currentUser.uid, 'repercussao'), record);
+        } else {
+          const local = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]');
+          local.push({ id: 'local_' + Date.now(), ...record });
+          localStorage.setItem('pbf_repercussao_local', JSON.stringify(local));
+        }
+        await loadReports();
+      } catch (storageError) {
+        console.warn('Download concluído, mas não foi possível guardar a cópia:', storageError);
       }
       input.value = '';
-      await loadReports();
-      alert('Planilha organizada com sucesso. Ela já está separada por técnico/equipe e pronta para baixar.');
+      alert(`Planilha organizada e baixada com sucesso: ${nomeArquivo}`);
     } catch (e) {
       console.error(e);
       alert('Não consegui organizar esta planilha. Confirme se ela possui a coluna “Técnico/equipe”.');
