@@ -414,8 +414,8 @@
   window.__handleReportUpload = async (input) => {
     const file = input.files[0];
     if (!file) return;
-    if (file.size > 900 * 1024) {
-      alert('Esse arquivo está grande demais (acima de ~900 KB) para guardar na nuvem. Tente compactar ou avise o Claude para ajustar o limite.');
+    if (file.size > 1.5 * 1024 * 1024) {
+      alert('Esse arquivo está grande demais (acima de 1,5 MB) para guardar na nuvem.');
       input.value = '';
       return;
     }
