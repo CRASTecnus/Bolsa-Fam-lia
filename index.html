@@ -95,6 +95,21 @@
     </div>
 
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <h2 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+        <i data-lucide="file-spreadsheet" class="w-4 h-4" style="color:var(--azul)"></i> Repercussão de Condicionalidades
+      </h2>
+      <p class="text-xs text-slate-500 mb-3">Guarde aqui a planilha que o MDS manda todo mês ímpar. Fica sincronizada na nuvem (se você estiver logado) e você baixa de novo quando precisar.</p>
+      <label class="w-full flex items-center justify-center gap-2 border-2 border-dashed rounded-xl py-3 text-xs font-bold cursor-pointer hover:bg-slate-50 mb-3" style="border-color:var(--azul); color:var(--azul)">
+        <i data-lucide="upload" class="w-4 h-4"></i> Enviar planilha (.xlsx)
+        <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="__handleReportUpload(this)">
+      </label>
+      <select id="reportAnoFilter" onchange="renderReports()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold mb-3 focus:outline-none focus:ring-2" style="--tw-ring-color:var(--azul)">
+        <option value="all">Todos os anos</option>
+      </select>
+      <div id="reportsList" class="space-y-2"></div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
       <h2 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
         <i data-lucide="info" class="w-4 h-4" style="color:var(--azul)"></i> Destaques do mês
       </h2>
@@ -230,7 +245,8 @@
     signInWithEmailAndPassword, signOut
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
-    getFirestore, doc, getDoc, setDoc, enableIndexedDbPersistence
+    getFirestore, doc, getDoc, setDoc, enableIndexedDbPersistence,
+    collection, addDoc, getDocs, deleteDoc, query, orderBy
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -249,6 +265,7 @@
 
   let currentUser = null;
   let notes = {};
+  let reports = []; // arquivos de Repercussão de Condicionalidades guardados
 
   const authArea = document.getElementById('authArea');
   const authModal = document.getElementById('authModal');
@@ -302,6 +319,117 @@
     render();
   }
 
+  const MESES_NOMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  function guessMesAno(filename) {
+    const map = { jan:0, fev:1, mar:2, abr:3, mai:4, jun:5, jul:6, ago:7, set:8, out:9, nov:10, dez:11 };
+    const norm = filename.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    let mes = null, ano = null;
+    const mMes = norm.match(/(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)/);
+    if (mMes) mes = map[mMes[1]];
+    const mAno = norm.match(/20\d{2}/);
+    if (mAno) ano = parseInt(mAno[0], 10);
+    return { mes, ano };
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result.split(',')[1]);
+      r.onerror = () => reject(new Error('Falha ao ler o arquivo'));
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function loadReports() {
+    if (currentUser) {
+      const snap = await getDocs(query(collection(db, 'users', currentUser.uid, 'repercussao'), orderBy('ano', 'desc'), orderBy('mes', 'desc')));
+      reports = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } else {
+      reports = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]');
+    }
+    renderReports();
+  }
+
+  window.__handleReportUpload = async (input) => {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 900 * 1024) {
+      alert('Esse arquivo está grande demais (acima de ~900 KB) para guardar na nuvem. Tente compactar ou avise o Claude para ajustar o limite.');
+      input.value = '';
+      return;
+    }
+    const guess = guessMesAno(file.name);
+    const mes = guess.mes !== null ? guess.mes : parseInt(prompt('Não consegui identificar o mês pelo nome do arquivo. Digite o número do mês (1=Jan ... 12=Dez):'), 10) - 1;
+    const ano = guess.ano !== null ? guess.ano : parseInt(prompt('Digite o ano (ex: 2026):'), 10);
+    if (isNaN(mes) || mes < 0 || mes > 11 || isNaN(ano)) { alert('Mês ou ano inválido — envio cancelado.'); input.value = ''; return; }
+
+    const dataBase64 = await fileToBase64(file);
+    const record = { filename: file.name, mes, ano, sizeKB: Math.round(file.size / 1024), uploadedAt: Date.now(), dataBase64 };
+
+    if (currentUser) {
+      await addDoc(collection(db, 'users', currentUser.uid, 'repercussao'), record);
+    } else {
+      const local = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]');
+      local.push({ id: 'local_' + Date.now(), ...record });
+      localStorage.setItem('pbf_repercussao_local', JSON.stringify(local));
+    }
+    input.value = '';
+    await loadReports();
+  };
+
+  window.__downloadReport = (id) => {
+    const rep = reports.find(r => r.id === id);
+    if (!rep) return;
+    const a = document.createElement('a');
+    a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + rep.dataBase64;
+    a.download = rep.filename || `Repercussao_${MESES_NOMES[rep.mes]}_${rep.ano}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  window.__deleteReport = async (id) => {
+    if (!confirm('Apagar este arquivo guardado? Essa ação não pode ser desfeita.')) return;
+    if (currentUser) {
+      await deleteDoc(doc(db, 'users', currentUser.uid, 'repercussao', id));
+    } else {
+      const local = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]').filter(r => r.id !== id);
+      localStorage.setItem('pbf_repercussao_local', JSON.stringify(local));
+    }
+    await loadReports();
+  };
+
+  function renderReports() {
+    const wrap = document.getElementById('reportsList');
+    const anoFilterEl = document.getElementById('reportAnoFilter');
+    if (!wrap) return;
+
+    const anos = [...new Set(reports.map(r => r.ano))].sort((a,b) => b - a);
+    if (anoFilterEl) {
+      const current = anoFilterEl.value;
+      anoFilterEl.innerHTML = '<option value="all">Todos os anos</option>' + anos.map(a => `<option value="${a}">${a}</option>`).join('');
+      if ([...anoFilterEl.options].some(o => o.value === current)) anoFilterEl.value = current;
+    }
+    const anoFilter = anoFilterEl ? anoFilterEl.value : 'all';
+    const filtered = reports.filter(r => anoFilter === 'all' || String(r.ano) === anoFilter);
+
+    if (!filtered.length) {
+      wrap.innerHTML = '<p class="text-xs text-slate-400 italic">Nenhum arquivo guardado ainda.</p>';
+      return;
+    }
+    wrap.innerHTML = filtered.map(r => `
+      <div class="flex items-center justify-between gap-2 border border-slate-200 rounded-xl px-3 py-2">
+        <div class="min-w-0">
+          <p class="text-xs font-bold truncate">${MESES_NOMES[r.mes] || '?'} / ${r.ano}</p>
+          <p class="text-[10px] text-slate-400 truncate">${r.filename || ''} · ${r.sizeKB || 0} KB</p>
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <button onclick="__downloadReport('${r.id}')" title="Baixar" class="p-1.5 rounded-lg hover:bg-slate-100"><i data-lucide="download" class="w-4 h-4" style="color:var(--azul)"></i></button>
+          <button onclick="__deleteReport('${r.id}')" title="Apagar" class="p-1.5 rounded-lg hover:bg-slate-100"><i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i></button>
+        </div>
+      </div>`).join('');
+    if (window.lucide) lucide.createIcons();
+  }
+
   window.__persistNote = async (key, value) => {
     if (value && value.text) notes[key] = value; else delete notes[key];
     if (currentUser) {
@@ -321,10 +449,12 @@
         </div>
         <p class="text-[10px] text-blue-200 mt-1 flex items-center gap-1 justify-end"><span>●</span> sincronizado na nuvem</p>`;
       await loadNotesFromCloud();
+      await loadReports();
     } else {
       notes = migrateNotes(JSON.parse(localStorage.getItem('pbf_notes_local') || '{}'));
       authArea.innerHTML = `<button onclick="openAuthModal()" class="bg-white text-blue-900 px-3 py-1.5 rounded-lg font-bold hover:opacity-90">Sincronizar notas</button>`;
       render();
+      await loadReports();
     }
   });
 
