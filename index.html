@@ -10,7 +10,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -437,6 +437,68 @@
     });
     XLSX.utils.book_append_sheet(out,XLSX.utils.aoa_to_sheet(summary),sheetName('Resumo do território'));
     [...groups.entries()].forEach(([team,g]) => XLSX.utils.book_append_sheet(out,XLSX.utils.aoa_to_sheet([outputHeader,...g.rows]),sheetName(team)));
+    const bordaLeve = {
+      top: { style: 'thin', color: { rgb: 'D9E2F3' } },
+      bottom: { style: 'thin', color: { rgb: 'D9E2F3' } },
+      left: { style: 'thin', color: { rgb: 'D9E2F3' } },
+      right: { style: 'thin', color: { rgb: 'D9E2F3' } }
+    };
+    const estiloCabecalho = {
+      font: { name: 'Arial', sz: 12, bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { patternType: 'solid', fgColor: { rgb: '0B2F7A' } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      border: bordaLeve
+    };
+    const estiloCelula = {
+      font: { name: 'Arial', sz: 12, color: { rgb: '1F2937' } },
+      alignment: { vertical: 'center', wrapText: true },
+      border: bordaLeve
+    };
+    const estiloCelulaAlternada = {
+      ...estiloCelula,
+      fill: { patternType: 'solid', fgColor: { rgb: 'F3F6FA' } }
+    };
+    const coresAbas = {
+      'Resumo do território': '0B2F7A',
+      'Fernanda Gomes': '159947',
+      'Cléo Sousa': '7C3AED',
+      'Bárbara Parente': 'DB2777',
+      'Susy Andrade': 'D97706',
+      'Paloma de Assis': '0891B2',
+      'Rafaela Garcia': '4F46E5',
+      'Território Volante': '65A30D'
+    };
+    out.SheetNames.forEach(name => {
+      const ws = out.Sheets[name];
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      const corAba = coresAbas[name] || '0B2F7A';
+      ws['!tabColor'] = { rgb: corAba };
+      ws['!rows'] = [];
+      for (let r = range.s.r; r <= range.e.r; r++) {
+        ws['!rows'][r] = { hpt: r === range.s.r ? 38 : 28 };
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const address = XLSX.utils.encode_cell({r,c});
+          if (!ws[address]) ws[address] = { v: '', t: 's' };
+          ws[address].s = r === range.s.r
+            ? { ...estiloCabecalho, fill: { patternType: 'solid', fgColor: { rgb: corAba } } }
+            : (r % 2 === 0 ? estiloCelulaAlternada : estiloCelula);
+        }
+      }
+      ws['!autofilter'] = { ref: ws['!ref'] };
+      ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+      ws['!cols'] = [];
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        let max = 12;
+        for (let r = range.s.r; r <= range.e.r; r++) {
+          const cell = ws[XLSX.utils.encode_cell({r,c})];
+          const value = cell && cell.v != null ? String(cell.v) : '';
+          max = Math.max(max, value.length);
+        }
+        const headerValue = String(ws[XLSX.utils.encode_cell({r: range.s.r, c})]?.v || '').toLowerCase();
+        const isLongText = /endereço|nome|motivo|tipo|referência|bairros agrupados/.test(headerValue);
+        ws['!cols'][c] = { wch: Math.min(max + 3, isLongText ? 72 : 30) };
+      }
+    });
     const written=XLSX.write(out,{bookType:'xlsx',type:'array'});
     const bytes=written instanceof ArrayBuffer ? new Uint8Array(written) : written;
     let binary=''; const chunk=0x8000;
