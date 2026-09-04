@@ -697,10 +697,41 @@ window.exportNotesPDF = exportNotesPDF;
 if (window.lucide) lucide.createIcons();
 render();
 
-// PWA
+// PWA — registro do service worker + atualização automática do app
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      // Se já existe uma versão nova esperando (baixada antes), assume agora.
+      if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+
+      // Quando uma versão nova do service worker terminar de instalar,
+      // manda ela assumir o controle na hora (sem esperar o usuário fechar
+      // e reabrir o app).
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            newWorker.postMessage('SKIP_WAITING');
+          }
+        });
+      });
+
+      // Toda vez que o app volta a ficar visível (usuário reabre a aba/app),
+      // verifica se existe uma versão mais nova do service worker publicada.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update();
+      });
+    }).catch(()=>{});
+  });
+
+  // Quando a nova versão assume o controle da página, recarrega sozinho
+  // para exibir a versão mais recente do app.
+  let refreshingPage = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshingPage) return;
+    refreshingPage = true;
+    window.location.reload();
   });
 }
 </script>
