@@ -95,7 +95,30 @@ Pronto — o Firebase está configurado. Isso é 100% grátis para uso pessoal (
 
 ---
 
-## 6. Personalizando
+## 6. Funcionamento offline
+
+Depois que o app for aberto **pelo menos uma vez com internet** (para baixar tudo: calendário, estilo visual, ícones e o gerador de PDF), ele passa a funcionar **totalmente offline**:
+
+- O calendário, os prazos e o visual do app continuam aparecendo normalmente sem internet.
+- Suas anotações continuam sendo salvas e lidas normalmente offline (ficam guardadas no aparelho e, quando a internet voltar, sincronizam sozinhas com a nuvem, se você estiver logado).
+- A exportação em PDF também funciona sem internet.
+- Assim que a internet voltar, o app aproveita para buscar a versão mais nova de tudo automaticamente (ver seção 7).
+
+**Importante:** o primeiro acesso (a primeira vez que a pessoa abre o link) precisa ser com internet, para o aparelho baixar e guardar tudo. Depois disso, funciona offline normalmente — inclusive já instalado como app no celular.
+
+## 7. Atualização automática do app
+
+Toda vez que você editar `index.html` (ou qualquer arquivo) e subir a mudança para o GitHub, o app instalado no celular/computador das pessoas se atualiza sozinho, sem precisar desinstalar nada:
+
+- Quando o app é aberto com internet, ele sempre busca a versão mais nova do `index.html` no servidor primeiro (e só usa a cópia salva localmente se estiver sem internet).
+- Se o app já estava aberto e uma versão nova chega, ele recarrega a tela sozinho para mostrar a atualização.
+- Ele também confere se há versão nova toda vez que o usuário volta a abrir o app (troca de aba, reabre o app no celular etc.).
+
+Ou seja: você só precisa subir os arquivos atualizados no GitHub — não precisa avisar os usuários nem pedir para reinstalar.
+
+**Exceção:** se um dia você trocar nomes de arquivos de ícones ou quiser forçar todo mundo a "limpar o cache" de uma vez (algo raro), edite o `sw.js` e troque `pbf-app-shell-v3` para `pbf-app-shell-v4` (ou outro número). Isso não é necessário para atualizações normais de texto, calendário ou visual do app.
+
+## 8. Personalizando
 
 - Cores, textos e ícones: tudo está em `index.html` (é um arquivo único, fácil de editar).
 - Para trocar o nome do app na tela inicial do celular, edite `name` e `short_name` em `manifest.json`.
