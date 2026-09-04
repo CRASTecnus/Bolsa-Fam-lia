@@ -10,6 +10,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -106,6 +107,17 @@
       <select id="reportAnoFilter" onchange="renderReports()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold mb-3 focus:outline-none focus:ring-2" style="--tw-ring-color:var(--azul)">
         <option value="all">Todos os anos</option>
       </select>
+      <div class="border-t border-slate-100 pt-3 mt-1 space-y-2">
+        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filtrar planilha por bairro</label>
+        <select id="reportFileFilter" onchange="loadReportFilterOptions()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2" style="--tw-ring-color:var(--azul)">
+          <option value="">Escolha uma planilha</option>
+        </select>
+        <select id="reportBairroFilter" multiple size="5" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2" style="--tw-ring-color:var(--azul)" disabled></select>
+        <p class="text-[10px] text-slate-400">Use Ctrl (Windows) ou Command (Mac) para selecionar vários bairros. Sem seleção, baixa todos.</p>
+        <button onclick="downloadFilteredReport()" class="w-full text-white px-3 py-2 rounded-xl text-xs font-bold transition hover:opacity-90 flex items-center justify-center gap-2" style="background:var(--azul)">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> Baixar planilha filtrada
+        </button>
+      </div>
       <div id="reportsList" class="space-y-2"></div>
     </div>
 
@@ -351,6 +363,54 @@
     renderReports();
   }
 
+  function makeCrasFormattedWorkbook(base64) {
+    const source = XLSX.read(bytesFromBase64(base64), {type:'array'});
+    const groups = new Map();
+    let header = null;
+    source.SheetNames.forEach(sheetName => {
+      if (sheetName === 'Resumo do território') return;
+      const rows = XLSX.utils.sheet_to_json(source.Sheets[sheetName], {header:1, defval:''});
+      if (!rows.length) return;
+      const h = rows[0];
+      if (!header) header = h;
+      const teamIdx = h.findIndex(v => String(v).trim().toLowerCase() === 'técnico/equipe');
+      const bairroIdx = h.findIndex(v => String(v).trim().toLowerCase() === 'bairro do território');
+      rows.slice(1).forEach(row => {
+        if (!row.some(v => String(v).trim() !== '')) return;
+        const team = teamIdx >= 0 && row[teamIdx] ? String(row[teamIdx]).trim() : sheetName;
+        const bairro = bairroIdx >= 0 ? String(row[bairroIdx] || '').trim() : '';
+        if (!groups.has(team)) groups.set(team, {rows: [], bairros: new Set(), formacao: ''});
+        const g = groups.get(team);
+        g.rows.push(row);
+        if (bairro) g.bairros.add(bairro);
+        if (!g.formacao && row[2]) g.formacao = row[2];
+      });
+    });
+    if (!header || !groups.size) throw new Error('Não encontrei uma tabela com a coluna Técnico/equipe.');
+    const out = XLSX.utils.book_new();
+    const used = new Set();
+    const sheetName = (name) => {
+      const base = String(name || 'Dados').replace(/[\\/?*\\[\]:]/g, ' ').slice(0,31).trim() || 'Dados';
+      let clean = base, n = 2;
+      while (used.has(clean)) clean = (base.slice(0, 28) + ' ' + n++).slice(0,31);
+      used.add(clean); return clean;
+    };
+    const summary = [['Técnico/equipe','Formação','Bairros agrupados','Nº de bairros','Registros no relatório']];
+    [...groups.entries()].forEach(([team, g]) => {
+      const bairros = [...g.bairros].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+      summary.push([team, g.formacao, bairros.join('; '), bairros.length, g.rows.length]);
+    });
+    XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet(summary), sheetName('Resumo do território'));
+    [...groups.entries()].forEach(([team, g]) => {
+      XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet([header, ...g.rows]), sheetName(team));
+    });
+    const bytes = XLSX.write(out, {bookType:'xlsx', type:'array'});
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.slice(i, i + chunk));
+    return btoa(binary);
+  }
+
   window.__handleReportUpload = async (input) => {
     const file = input.files[0];
     if (!file) return;
@@ -364,18 +424,26 @@
     const ano = guess.ano !== null ? guess.ano : parseInt(prompt('Digite o ano (ex: 2026):'), 10);
     if (isNaN(mes) || mes < 0 || mes > 11 || isNaN(ano)) { alert('Mês ou ano inválido — envio cancelado.'); input.value = ''; return; }
 
-    const dataBase64 = await fileToBase64(file);
-    const record = { filename: file.name, mes, ano, sizeKB: Math.round(file.size / 1024), uploadedAt: Date.now(), dataBase64 };
-
-    if (currentUser) {
-      await addDoc(collection(db, 'users', currentUser.uid, 'repercussao'), record);
-    } else {
-      const local = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]');
-      local.push({ id: 'local_' + Date.now(), ...record });
-      localStorage.setItem('pbf_repercussao_local', JSON.stringify(local));
+    try {
+      if (!window.XLSX) throw new Error('Biblioteca de planilhas não carregada.');
+      const originalBase64 = await fileToBase64(file);
+      const dataBase64 = makeCrasFormattedWorkbook(originalBase64);
+      const record = { filename: file.name.replace(/\.(xlsx|xls|csv)$/i, '') + '_formatada.xlsx', mes, ano, sizeKB: Math.round((dataBase64.length * 3 / 4) / 1024), uploadedAt: Date.now(), dataBase64 };
+      if (currentUser) {
+        await addDoc(collection(db, 'users', currentUser.uid, 'repercussao'), record);
+      } else {
+        const local = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]');
+        local.push({ id: 'local_' + Date.now(), ...record });
+        localStorage.setItem('pbf_repercussao_local', JSON.stringify(local));
+      }
+      input.value = '';
+      await loadReports();
+      alert('Planilha organizada com sucesso. Ela já está separada por técnico/equipe e pronta para baixar.');
+    } catch (e) {
+      console.error(e);
+      alert('Não consegui organizar esta planilha. Confirme se ela possui a coluna “Técnico/equipe”.');
+      input.value = '';
     }
-    input.value = '';
-    await loadReports();
   };
 
   window.__downloadReport = (id) => {
@@ -385,6 +453,82 @@
     a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + rep.dataBase64;
     a.download = rep.filename || `Repercussao_${MESES_NOMES[rep.mes]}_${rep.ano}.xlsx`;
     document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  function bytesFromBase64(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  function selectedBairros() {
+    return [...document.getElementById('reportBairroFilter').selectedOptions].map(o => o.value);
+  }
+
+  window.loadReportFilterOptions = async () => {
+    const fileId = document.getElementById('reportFileFilter').value;
+    const bairroEl = document.getElementById('reportBairroFilter');
+    bairroEl.innerHTML = '';
+    bairroEl.disabled = true;
+    if (!fileId || !window.XLSX) return;
+    const rep = reports.find(r => r.id === fileId);
+    if (!rep) return;
+    try {
+      const wb = XLSX.read(bytesFromBase64(rep.dataBase64), {type:'array'});
+      const bairros = new Set();
+      wb.SheetNames.forEach(name => {
+        if (name === 'Resumo do território') return;
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:''});
+        const header = rows[0] || [];
+        const idx = header.findIndex(h => String(h).trim().toLowerCase() === 'bairro do território');
+        rows.slice(1).forEach(row => { if (idx >= 0 && row[idx]) bairros.add(String(row[idx]).trim()); });
+      });
+      [...bairros].sort((a,b) => a.localeCompare(b, 'pt-BR')).forEach(bairro => {
+        const opt = document.createElement('option'); opt.value = bairro; opt.textContent = bairro; bairroEl.appendChild(opt);
+      });
+      bairroEl.disabled = bairros.size === 0;
+    } catch (e) { alert('Não foi possível ler os bairros desta planilha.'); }
+  };
+
+  function safeSheetName(name, used) {
+    let clean = String(name || 'Dados').replace(/[\/?*\[\]:]/g, ' ').slice(0,31).trim() || 'Dados';
+    let base = clean, n = 2;
+    while (used.has(clean)) { clean = (base.slice(0, 28) + ' ' + n++).slice(0,31); }
+    used.add(clean); return clean;
+  }
+
+  window.downloadFilteredReport = () => {
+    const fileId = document.getElementById('reportFileFilter').value;
+    const rep = reports.find(r => r.id === fileId);
+    if (!rep) { alert('Escolha uma planilha primeiro.'); return; }
+    try {
+      const selected = selectedBairros();
+      const wb = XLSX.read(bytesFromBase64(rep.dataBase64), {type:'array'});
+      const outWb = XLSX.utils.book_new();
+      const used = new Set();
+      const summaryRows = [['Técnico/equipe','Formação','Bairros agrupados','Nº de bairros','Registros no relatório']];
+      wb.SheetNames.forEach(name => {
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:''});
+        if (!rows.length) return;
+        if (name === 'Resumo do território') return;
+        const header = rows[0];
+        const idx = header.findIndex(h => String(h).trim().toLowerCase() === 'bairro do território');
+        const filtered = idx < 0 ? rows.slice(1) : rows.slice(1).filter(row => !selected.length || selected.includes(String(row[idx]).trim()));
+        if (!filtered.length) return;
+        const result = [header, ...filtered];
+        const sheetName = safeSheetName(name, used);
+        XLSX.utils.book_append_sheet(outWb, XLSX.utils.aoa_to_sheet(result), sheetName);
+        const formacao = filtered[0]?.[2] || '';
+        const bairroSet = [...new Set(filtered.map(row => String(row[idx] || '').trim()).filter(Boolean))];
+        summaryRows.push([name, formacao, bairroSet.join('; '), bairroSet.length, filtered.length]);
+      });
+      const summary = [['Técnico/equipe','Formação','Bairros agrupados','Nº de bairros','Registros no relatório'], ...summaryRows.slice(1)];
+      XLSX.utils.book_append_sheet(outWb, XLSX.utils.aoa_to_sheet(summary), safeSheetName('Resumo do território', used), true);
+      const base = (rep.filename || 'Repercussao').replace(/\.(xlsx|xls|csv)$/i, '');
+      const suffix = selected.length ? '_filtrada' : '_completa';
+      XLSX.writeFile(outWb, base + suffix + '.xlsx');
+    } catch (e) { console.error(e); alert('Não foi possível gerar a planilha filtrada.'); }
   };
 
   window.__deleteReport = async (id) => {
@@ -411,6 +555,12 @@
     }
     const anoFilter = anoFilterEl ? anoFilterEl.value : 'all';
     const filtered = reports.filter(r => anoFilter === 'all' || String(r.ano) === anoFilter);
+    const fileFilterEl = document.getElementById('reportFileFilter');
+    if (fileFilterEl) {
+      const previous = fileFilterEl.value;
+      fileFilterEl.innerHTML = '<option value="">Escolha uma planilha</option>' + reports.map(r => `<option value="${r.id}">${MESES_NOMES[r.mes] || '?'} / ${r.ano} — ${r.filename || 'arquivo'}</option>`).join('');
+      if (reports.some(r => r.id === previous)) fileFilterEl.value = previous;
+    }
 
     if (!filtered.length) {
       wrap.innerHTML = '<p class="text-xs text-slate-400 italic">Nenhum arquivo guardado ainda.</p>';
