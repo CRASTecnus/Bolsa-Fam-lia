@@ -386,6 +386,7 @@
       '13 DE SETEMBRO':['Território Volante','Equipe volante','13 de Setembro'],
       '13 DE SEEMBREO':['Território Volante','Equipe volante','13 de Setembro'],
       'MARECHAL RONDON':['Território Volante','Equipe volante','Marechal Rondon'],
+      'MARECHAL RONDON (OCUPACAO)':['Território Volante','Equipe volante','Marechal Rondon'],
       'NOVA VIDA':['Território Volante','Equipe volante','Nova Vida (Ocupação)'],
       'NOVA VIDA (OCUPACAO)':['Território Volante','Equipe volante','Nova Vida (Ocupação)'],
       'PROFESSORA ARACELI SOUTO MAIOR':['Território Volante','Equipe volante','Professora Araceli Souto Maior']
@@ -482,7 +483,8 @@
       const ws = out.Sheets[name];
       const range = XLSX.utils.decode_range(ws['!ref']);
       const corAba = coresAbas[name] || '0B2F7A';
-      ws['!tabColor'] = { rgb: corAba };
+      // Cor da guia inferior da aba no Excel/LibreOffice.
+      ws['!tabColor'] = corAba;
       ws['!rows'] = [];
       for (let r = range.s.r; r <= range.e.r; r++) {
         ws['!rows'][r] = { hpt: r === range.s.r ? 38 : 28 };
