@@ -445,6 +445,20 @@
     return btoa(binary);
   };
 
+  function guessMesAnoFromWorkbook(base64) {
+    const wb = XLSX.read(bytesFromBase64(base64), {type:'array'});
+    const meses = {janeiro:0, fevereiro:1, marco:2, março:2, abril:3, maio:4, junho:5, julho:6, agosto:7, setembro:8, outubro:9, novembro:10, dezembro:11};
+    for (const name of wb.SheetNames) {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:''});
+      for (const row of rows.slice(0, 15)) {
+        const text = row.map(v => String(v || '')).join(' ');
+        const match = text.match(/(?:per[ií]odo[^:]*:\s*)?(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s*[/ de-]+\s*(20\d{2})/i);
+        if (match) return {mes: meses[normalizeText(match[1])], ano: parseInt(match[2], 10)};
+      }
+    }
+    return {mes:null, ano:null};
+  }
+
   window.__handleReportUpload = async (input) => {
     const file = input.files[0];
     if (!file) return;
@@ -453,16 +467,19 @@
       input.value = '';
       return;
     }
+    const originalBase64 = await fileToBase64(file);
     const guess = guessMesAno(file.name);
-    const mes = guess.mes !== null ? guess.mes : parseInt(prompt('Não consegui identificar o mês pelo nome do arquivo. Digite o número do mês (1=Jan ... 12=Dez):'), 10) - 1;
-    const ano = guess.ano !== null ? guess.ano : parseInt(prompt('Digite o ano (ex: 2026):'), 10);
+    const contentGuess = guess.mes !== null && guess.ano !== null ? guess : guessMesAnoFromWorkbook(originalBase64);
+    const mes = contentGuess.mes !== null ? contentGuess.mes : parseInt(prompt('Não consegui identificar o mês. Digite o número do mês (1=Jan ... 12=Dez):'), 10) - 1;
+    const ano = contentGuess.ano !== null ? contentGuess.ano : parseInt(prompt('Digite o ano (ex: 2026):'), 10);
     if (isNaN(mes) || mes < 0 || mes > 11 || isNaN(ano)) { alert('Mês ou ano inválido — envio cancelado.'); input.value = ''; return; }
 
     try {
       if (!window.XLSX) throw new Error('Biblioteca de planilhas não carregada.');
-      const originalBase64 = await fileToBase64(file);
       const dataBase64 = makeCrasFormattedWorkbook(originalBase64);
-      const record = { filename: file.name.replace(/\.(xlsx|xls|csv)$/i, '') + '_formatada.xlsx', mes, ano, sizeKB: Math.round((dataBase64.length * 3 / 4) / 1024), uploadedAt: Date.now(), dataBase64 };
+      const nomeMes = MESES_NOMES[mes] || 'Mês';
+      const nomeArquivo = `Repercussão ${nomeMes} de ${ano} (CRAS Cristiana).xlsx`;
+      const record = { filename: nomeArquivo, mes, ano, sizeKB: Math.round((dataBase64.length * 3 / 4) / 1024), uploadedAt: Date.now(), dataBase64 };
       if (currentUser) {
         await addDoc(collection(db, 'users', currentUser.uid, 'repercussao'), record);
       } else {
