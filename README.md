@@ -55,6 +55,8 @@ Suba todos esses arquivos para a raiz do seu repositório no GitHub (ou para uma
 3. Escolha **modo de produção** e a região mais próxima (ex: `southamerica-east1` — São Paulo).
 4. Depois de criado, vá na aba **Regras** e cole o conteúdo do arquivo `firestore.rules` deste projeto. Clique em **Publicar**.
 
+> **Se você já tinha o app publicado antes desta versão:** as regras mudaram (foi adicionada a subcoleção `repercussao`). Volte na aba **Regras** do Firestore e cole o `firestore.rules` atualizado de novo, senão o envio das planilhas de Repercussão vai dar erro de permissão.
+
 Pronto — o Firebase está configurado. Isso é 100% grátis para uso pessoal (o plano gratuito do Firebase é bem generoso para um app individual).
 
 ---
@@ -118,7 +120,19 @@ Ou seja: você só precisa subir os arquivos atualizados no GitHub — não prec
 
 **Exceção:** se um dia você trocar nomes de arquivos de ícones ou quiser forçar todo mundo a "limpar o cache" de uma vez (algo raro), edite o `sw.js` e troque `pbf-app-shell-v3` para `pbf-app-shell-v4` (ou outro número). Isso não é necessário para atualizações normais de texto, calendário ou visual do app.
 
-## 8. Personalizando
+## 8. Repercussão de Condicionalidades (planilhas do MDS)
+
+Na barra lateral do app, novo bloco **"Repercussão de Condicionalidades"**:
+
+- Todo mês ímpar, quando o MDS mandar a planilha, clique em **"Enviar planilha (.xlsx)"** e selecione o arquivo.
+- O app tenta identificar sozinho o mês e o ano pelo nome do arquivo (ex: `Repercussão_Setembro_de_2026...`); se não conseguir, ele pergunta.
+- O arquivo fica guardado (sincronizado na nuvem, se você estiver logado — ou só neste aparelho, se não estiver) e aparece na lista, organizado por ano.
+- A qualquer momento, clique no ícone de **download** para baixar o arquivo original de volta, ou no ícone de **lixeira** para apagá-lo.
+- Use o filtro **"Todos os anos"** para ver só os arquivos de um ano específico.
+
+**Limite:** por ser guardado no Firestore (plano gratuito), cada planilha precisa ter até ~900 KB. As planilhas de Repercussão normalmente ficam bem abaixo disso.
+
+## 9. Personalizando
 
 - Cores, textos e ícones: tudo está em `index.html` (é um arquivo único, fácil de editar).
 - Para trocar o nome do app na tela inicial do celular, edite `name` e `short_name` em `manifest.json`.
