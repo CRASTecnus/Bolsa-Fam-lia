@@ -414,15 +414,27 @@
       let currentBairro = '';
       let currentResponsavel = '';
       let currentEfeito = '';
+      let currentFamilyValues = [];
       rows.slice(headerIndex + 1).forEach(row => {
         if (!row.some(v => String(v).trim() !== '')) return;
-        const rowBairro = String(row[bairroIdx] || '').trim();
+        const isContinuation = !String(row[bairroIdx] || '').trim() && row.length <= 6;
+        const fullRow = Array(h.length).fill('');
+        if (isContinuation && row.length <= 6 && h.length > 16) {
+          // O relatório MDS coloca linhas adicionais da família sem repetir
+          // os campos iniciais; reposicionamos os dados do integrante.
+          row.forEach((value, index) => { fullRow[12 + index] = value; });
+          currentFamilyValues.forEach((value, index) => { if (index < 12) fullRow[index] = value; });
+        } else {
+          row.forEach((value, index) => { if (index < fullRow.length) fullRow[index] = value; });
+        }
+        const rowBairro = String(fullRow[bairroIdx] || '').trim();
         if (rowBairro) currentBairro = rowBairro;
         if (!currentBairro) return;
-        if (responsavelIdx >= 0 && String(row[responsavelIdx] || '').trim()) currentResponsavel = String(row[responsavelIdx]).trim();
-        if (efeitoIdx >= 0 && String(row[efeitoIdx] || '').trim()) currentEfeito = String(row[efeitoIdx]).trim();
-        if (responsavelIdx >= 0 && !String(row[responsavelIdx] || '').trim() && currentResponsavel) row[responsavelIdx] = currentResponsavel;
-        if (efeitoIdx >= 0 && !String(row[efeitoIdx] || '').trim() && currentEfeito) row[efeitoIdx] = currentEfeito;
+        if (!isContinuation) currentFamilyValues = fullRow.slice(0, 12);
+        if (responsavelIdx >= 0 && String(fullRow[responsavelIdx] || '').trim()) currentResponsavel = String(fullRow[responsavelIdx]).trim();
+        if (efeitoIdx >= 0 && String(fullRow[efeitoIdx] || '').trim()) currentEfeito = String(fullRow[efeitoIdx]).trim();
+        if (responsavelIdx >= 0 && !String(fullRow[responsavelIdx] || '').trim() && currentResponsavel) fullRow[responsavelIdx] = currentResponsavel;
+        if (efeitoIdx >= 0 && !String(fullRow[efeitoIdx] || '').trim() && currentEfeito) fullRow[efeitoIdx] = currentEfeito;
         const key = normalizeText(currentBairro).toUpperCase();
         let config = mapaBairros[key];
         if (!config && key.includes('ARACELI') && key.includes('SOUTO')) config = ['Território Volante','Equipe volante','Professora Araceli Souto Maior'];
@@ -432,7 +444,7 @@
         const [team, formacao, bairroNome] = config;
         if (!groups.has(team)) groups.set(team, {rows:[], bairros:new Set(), formacao});
         const g = groups.get(team);
-        g.rows.push([bairroNome, team, formacao, ...row]);
+        g.rows.push([bairroNome, team, formacao, ...fullRow]);
         g.bairros.add(bairroNome);
       });
     });
