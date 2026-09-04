@@ -1,4 +1,4 @@
-# Bolsa Família 2026 — Calendário & Notas
+# Anona — Sistema de acompanhamento de condicionalidades do Bolsa Família
 
 App simples (site estático) com:
 - Calendário oficial de pagamentos do Bolsa Família 2026 por final do NIS;
@@ -27,16 +27,16 @@ Suba todos esses arquivos para a raiz do seu repositório no GitHub (ou para uma
 ## 2. Criar o projeto no Firebase (grátis)
 
 1. Acesse **https://console.firebase.google.com** e entre com uma conta Google.
-2. Clique em **Adicionar projeto**, dê um nome (ex: `bolsa-familia-app`) e conclua a criação. Não precisa ativar o Google Analytics.
+2. Clique em **Adicionar projeto**, dê um nome (ex: `anona-app`) e conclua a criação. Não precisa ativar o Google Analytics.
 3. Dentro do projeto, clique no ícone **`</>`** ("Adicionar app da Web").
    - Dê um apelido, **não** marque Firebase Hosting (você vai usar o GitHub Pages).
    - O Firebase vai mostrar um bloco `firebaseConfig` parecido com este:
      ```js
      const firebaseConfig = {
        apiKey: "AIza...",
-       authDomain: "bolsa-familia-app.firebaseapp.com",
-       projectId: "bolsa-familia-app",
-       storageBucket: "bolsa-familia-app.appspot.com",
+       authDomain: "anona-app.firebaseapp.com",
+       projectId: "anona-app",
+       storageBucket: "anona-app.appspot.com",
        messagingSenderId: "123456789",
        appId: "1:123456789:web:abcdef"
      };
@@ -136,3 +136,52 @@ Na barra lateral do app, novo bloco **"Repercussão de Condicionalidades"**:
 
 - Cores, textos e ícones: tudo está em `index.html` (é um arquivo único, fácil de editar).
 - Para trocar o nome do app na tela inicial do celular, edite `name` e `short_name` em `manifest.json`.
+
+---
+
+## 10. Atualização anual (todo início de ano)
+
+O app foi organizado para essa atualização ser rápida. Tudo o que muda de ano para ano fica junto, no topo do segundo bloco de código (`<!-- APP -->`) dentro do `index.html`. Abra o arquivo, procure por `ANO_VIGENTE` e siga os passos:
+
+1. **Troque o número do ano**
+   ```js
+   const ANO_VIGENTE = 2026;
+   ```
+   Troque `2026` pelo novo ano (ex: `2027`). Isso já atualiza sozinho: o título da aba, a tela de senha, o cabeçalho, o rodapé, o nome/título do PDF exportado e o limite de navegação do calendário (o app só deixa passear pelos meses do ano vigente).
+
+2. **Troque os três blocos de dados oficiais**, logo abaixo do `ANO_VIGENTE` (estão marcados com um comentário `EDITAR TODO INÍCIO DE ANO`). Pegue os dados novos no calendário oficial MDS/Caixa e nos comunicados de Condicionalidades do ano novo, e substitua:
+   - **`monthHighlights`** — os destaques de cada mês (saúde, educação, SICON, interrupção) que aparecem no resumo do mês.
+   - **`officialEvents`** — os prazos específicos por data (formato `"AAAA-MM-DD"`), de saúde/educação/SICON/interrupção.
+   - **`paymentCalendar`** — as datas de pagamento por final do NIS. Cada mês (0=Janeiro a 11=Dezembro) tem uma lista de **10 números**, na ordem: NIS final **1, 2, 3, 4, 5, 6, 7, 8, 9, 0** — nessa ordem exata.
+
+   Dica: é mais fácil apagar o conteúdo de dentro das chaves `{ }` de cada um desses três blocos e colar o novo, mantendo o mesmo formato de quem já está lá.
+
+3. **Confira se os valores dos benefícios mudaram** (seção "Valores" na barra lateral, perto da linha 175 do `index.html`): o mínimo garantido (hoje R$ 600), o Benefício Primeira Infância (hoje + R$ 150) e o Benefício Variável Familiar (hoje + R$ 50). Se o governo reajustar esses valores, edite o texto diretamente ali.
+
+4. **Suba o `index.html` atualizado no GitHub.** Como o app se atualiza sozinho (ver seção 7), todo mundo que já tem o app instalado vai receber a versão nova automaticamente, sem precisar reinstalar.
+
+**Não precisa mexer em:** `manifest.json`, `sw.js` ou `firestore.rules` — nenhum desses depende do ano.
+
+---
+
+## 11. Segurança — o que foi revisado
+
+O app foi revisado e alguns pontos foram corrigidos diretamente no código. Resumo:
+
+### Corrigido no código
+- **Vazamento por trás da tela de senha (corrigido):** antes, a tela de senha só *escondia visualmente* o app (`display:none`) — mas os dados (notas, planilhas) já eram carregados e escritos no HTML da página em segundo plano, então dava pra ver tudo sem digitar a senha, só abrindo o **Inspecionar elemento** do navegador. Agora o carregamento e a exibição desses dados só acontecem depois que a senha certa é digitada.
+- **Nomes de arquivo sem escape (corrigido):** a lista de planilhas de Repercussão agora trata o nome do arquivo com segurança antes de exibir, evitando que um nome de arquivo malicioso injete código na página.
+- **Biblioteca de ícones sem versão fixa (corrigido):** o `lucide@latest` foi trocado por uma versão fixa (`lucide@0.469.0`), pra evitar que uma atualização não testada da biblioteca quebre o app de uma hora pra outra.
+- **Botões "Sair" ambíguos (corrigido):** agora o cadeado no cabeçalho diz "Travar o app", e o botão ao lado do e-mail sincronizado diz "Sair da conta" — antes os dois se chamavam só "Sair" e podiam confundir.
+
+### Já estava OK
+- **Regras do Firestore** (`firestore.rules`): cada pessoa só lê/escreve os próprios dados (`request.auth.uid == userId`). Isso já garante que ninguém acessa notas ou planilhas de outra conta pelo banco de dados.
+- O texto das notas já era exibido com escape (protegido contra injeção de código).
+
+### Limitações que continuam existindo (importante saber)
+- **A senha do app ("Paulus") não é uma segurança real, é só uma trava simples.** Ela fica escrita no código-fonte do site — qualquer pessoa com conhecimento técnico básico (abrir o "Ver código-fonte" ou o Console do navegador) consegue lê-la ou contornar a tela. Ela serve para afastar acesso casual (alguém que ache o link por acaso), não para proteger contra alguém com esse tipo de conhecimento.
+- **O botão de cadeado ("Travar app") não desconecta da conta na nuvem.** Ele só volta a pedir a senha do app; se alguém contornar a tela de senha num aparelho onde você já sincronizou notas, ainda seria possível ver os dados da conta que já estava logada ali. Se for usar o app num aparelho compartilhado, use também "Sair da conta" (perto do e-mail, no cabeçalho) além de travar.
+- **A `apiKey` do Firebase aparece no código do site.** Isso é normal e esperado para apps desse tipo (não é uma senha secreta) — a proteção de verdade é feita pelas regras do Firestore e pela autenticação, que já estão corretas. Mesmo assim, para reforçar, você pode:
+  1. No **Google Cloud Console** (console.cloud.google.com) → **APIs e Serviços > Credenciais**, abrir essa chave de API e restringir "Restrições de aplicativo" para aceitar apenas o domínio do seu GitHub Pages (`https://SEU-USUARIO.github.io/*`). Isso impede que alguém copie sua chave e a use em outro site.
+  2. Ativar **2 fatores (2FA)** na conta Google usada no Firebase — essa conta é o verdadeiro "cofre" de tudo: quem tiver acesso a ela, acessa o console e os dados de todo mundo que sincronizou.
+- **Como as notas podem conter dados sensíveis de famílias atendidas**, vale reforçar: não compartilhe a senha do app nem as credenciais da sua conta de sincronização com ninguém, e sempre use "Sair da conta" ao terminar de usar num computador que não é só seu (biblioteca, órgão público etc.).
