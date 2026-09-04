@@ -354,12 +354,10 @@
   }
 
   async function loadReports() {
-    if (currentUser) {
-      const snap = await getDocs(query(collection(db, 'users', currentUser.uid, 'repercussao'), orderBy('ano', 'desc'), orderBy('mes', 'desc')));
-      reports = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } else {
-      reports = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]');
-    }
+    // Planilhas ficam somente neste navegador; não são enviadas para a nuvem.
+    reports = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]')
+      .filter(r => r && r.dataBase64 && r.dataBase64.length > 100);
+    localStorage.setItem('pbf_repercussao_local', JSON.stringify(reports));
     renderReports();
   }
 
@@ -490,16 +488,12 @@
       document.body.appendChild(linkDownload); linkDownload.click(); linkDownload.remove();
       const record = { filename: nomeArquivo, mes, ano, sizeKB: Math.round((dataBase64.length * 3 / 4) / 1024), uploadedAt: Date.now(), dataBase64 };
       try {
-        if (currentUser) {
-          await addDoc(collection(db, 'users', currentUser.uid, 'repercussao'), record);
-        } else {
-          const local = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]');
-          local.push({ id: 'local_' + Date.now(), ...record });
-          localStorage.setItem('pbf_repercussao_local', JSON.stringify(local));
-        }
+        const local = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]');
+        local.push({ id: 'local_' + Date.now(), ...record });
+        localStorage.setItem('pbf_repercussao_local', JSON.stringify(local));
         await loadReports();
       } catch (storageError) {
-        console.warn('Download concluído, mas não foi possível guardar a cópia:', storageError);
+        console.warn('Download concluído, mas não foi possível guardar a cópia neste navegador:', storageError);
       }
       input.value = '';
       alert(`Planilha organizada e baixada com sucesso: ${nomeArquivo}`);
@@ -597,12 +591,8 @@
 
   window.__deleteReport = async (id) => {
     if (!confirm('Apagar este arquivo guardado? Essa ação não pode ser desfeita.')) return;
-    if (currentUser) {
-      await deleteDoc(doc(db, 'users', currentUser.uid, 'repercussao', id));
-    } else {
-      const local = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]').filter(r => r.id !== id);
-      localStorage.setItem('pbf_repercussao_local', JSON.stringify(local));
-    }
+    const local = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]').filter(r => r.id !== id);
+    localStorage.setItem('pbf_repercussao_local', JSON.stringify(local));
     await loadReports();
   };
 
